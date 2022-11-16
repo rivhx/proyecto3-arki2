@@ -1,6 +1,6 @@
 # archivos de datos 
-/precipitation_data
-/results_probabilities
-/stations_location
-/TCs_data
-/Thresholds
+/precipitation_data.txt
+/results_probabilities.csv
+/stations_location.txt
+/TCs_data.txt
+/Thresholds.csv
