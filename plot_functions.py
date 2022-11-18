@@ -55,8 +55,8 @@ def plot_HexGrid(region, x_cent: List[float], y_cent: List[float], r: float, lat
               pen = "1.15p,black",
           ) #dots "1p,black,."
     fig.legend()
-    fig.show(method="external")
-    fig.savefig('Hexagonal_Grid_wTCs.png', dpi = 650)
+    # fig.show(method="external")
+    # fig.savefig('Hexagonal_Grid_wTCs.png', dpi = 650)
     
 def make_figures(df: pd.DataFrame, x_center: float, y_center: float, stations, region, style, projection, savedir) -> None:
     """
@@ -90,7 +90,7 @@ def make_figures(df: pd.DataFrame, x_center: float, y_center: float, stations, r
         # fig.show(method="external")
         x_center = round(x_center, 2)
         y_center = round(y_center, 2)
-        fig.savefig(f'{savedir}\LON{x_center}_LAT{y_center}_{labels[alerta]}_alert.png', dpi = 650)
+        # fig.savefig(f'{savedir}\LON{x_center}_LAT{y_center}_{labels[alerta]}_alert.png', dpi = 650)
 
     
     
