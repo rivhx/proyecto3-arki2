@@ -1,23 +1,24 @@
 import auxiliar_functions as aux
 import pandas as pd
-import pygmt
+##import pygmt
 from datetime import datetime
+import threading
 
 
-def demo(region, projection = "M17.5c", style = "c0.125c"):
-    """
-    Parameters:
-        region (List of floats): min/max longitude and latitude coordinates to define the region
-        projection (str): projection and size of the map
-        style (str): style and size of the scatter plot in the map
-    """
-    station_locations = pd.read_csv('stations_location.txt', delimiter ="\t")
-    fig = pygmt.Figure()
-    fig.coast(shorelines="0.8p,black", region= region, frame="a", projection=projection, borders=["1/0.8p,black", "2/0.3p,black"] ,land="#efefdb") #, water="skyblue"
-    # fig.basemap(map_scale="jBL+w500k+o0.5c/0.5c+f+u") #Map Scale
-    fig.plot(x = station_locations['X'], y = station_locations['Y'], style= style, color= "red", pen="black", label="stations")
-    fig.legend()
-    fig.show(method="external")
+# def demo(region, projection = "M17.5c", style = "c0.125c"):
+#     """
+#     Parameters:
+#         region (List of floats): min/max longitude and latitude coordinates to define the region
+#         projection (str): projection and size of the map
+#         style (str): style and size of the scatter plot in the map
+#     """
+#     station_locations = pd.read_csv('stations_location.txt', delimiter ="\t")
+#     fig = pygmt.Figure()
+#     fig.coast(shorelines="0.8p,black", region= region, frame="a", projection=projection, borders=["1/0.8p,black", "2/0.3p,black"] ,land="#efefdb") #, water="skyblue"
+#     # fig.basemap(map_scale="jBL+w500k+o0.5c/0.5c+f+u") #Map Scale
+#     fig.plot(x = station_locations['X'], y = station_locations['Y'], style= style, color= "red", pen="black", label="stations")
+#     fig.legend()
+#     fig.show(method="external")
     
 ##############################################################################################################################################
 
@@ -44,7 +45,6 @@ def main(compute_probs, period, grid_region, stations_region, location, cols, ro
     Process:
         Makes the hexagonal grid and computing of probabilities starting from raw data
     """
-    start_time = datetime.now()
     #load precipitation data, stations location data, TCs data and Thresholds
     prepc_data = pd.read_csv('precipitation_data.txt', delimiter = "\t", header=None)
     station_locations = pd.read_csv('stations_location.txt', delimiter ="\t")
@@ -105,5 +105,6 @@ def main(compute_probs, period, grid_region, stations_region, location, cols, ro
 # ##demo([-120, -70,-20, 20])
 start_time = datetime.now()
 main(True, ['1/1/1981', '31/12/2020'], [-120, -70,0, 20], [-86, -82.5,8, 11.5], (-105, 10), 4, 3, 2.5)
+##aux.get_thresholds()
 end_time = datetime.now()
 print('Duration: {}'.format(end_time - start_time))

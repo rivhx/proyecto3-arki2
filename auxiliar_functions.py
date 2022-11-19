@@ -108,7 +108,7 @@ def create_hex_grid(df: pd.DataFrame, region, xpos, ypos, style, projection, nco
     y_cent.reverse()
     coords = list(zip(x_cent,y_cent))  
     Matrix = create_grid_matrix(df, coords, grid_matrix,r)
-    plot.plot_HexGrid(region, x_cent, y_cent, r ,lat, lon, style, projection)
+    # plot.plot_HexGrid(region, x_cent, y_cent, r ,lat, lon, style, projection)
     return (Matrix, [x_cent, y_cent]) 
 
 def create_grid_matrix(df: pd.DataFrame,  centers: List[Tuple[float]], Matrix: List[List[int]],r) -> List[List[pd.DataFrame]]:
@@ -223,12 +223,12 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
                     hex_loc_df = pd.DataFrame([[x_centers_par[j], y_centers[i]]],columns = ['Hex_lat', 'Hex_long'])
                     probs_results_aux = pd.concat([hex_loc_df, probabilities_df])
                     probs_results = pd.concat([probs_results, probs_results_aux])
-                    plot.make_figures(probabilities_df, x_centers_par[j], y_centers[i], stations, region, style, projection, savedir)
+                    # plot.make_figures(probabilities_df, x_centers_par[j], y_centers[i], stations, region, style, projection, savedir)
                 else:
                     probabilities_df = get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds)
                     hex_loc_df = pd.DataFrame([[x_centers_impar[j], y_centers[i]]],columns = ['Hex_lat', 'Hex_long'])
                     probs_results_aux = pd.concat([hex_loc_df, probabilities_df])
                     probs_results = pd.concat([probs_results, probs_results_aux])
-                    plot.make_figures(probabilities_df, x_centers_impar[j], y_centers[i], stations, region, style, projection, savedir)
+                    # plot.make_figures(probabilities_df, x_centers_impar[j], y_centers[i], stations, region, style, projection, savedir)
     probs_results.to_csv('results_probabilities.csv') 
     
