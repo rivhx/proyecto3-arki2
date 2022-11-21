@@ -7,6 +7,8 @@ import matplotlib.path as mpltPath
 import plot_functions as plot
 import threading
 
+results = []
+
 def create_IRdf(df: pd.DataFrame) -> List[str]:
     """
     Parameters:
@@ -168,7 +170,7 @@ def make_grid(ncolumns: int, nrows: int, scale: float, xpos , ypos) -> Tuple[flo
     return coord_x, coord_y
 
 
-def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, center,i,results) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
+def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, center,x) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
     """
     Parameters:
         df (pd DataFrame): Induced precipitation data of one hexagon
@@ -180,6 +182,7 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
     Return:
         pd DataFrame containing probabilities of all stations due to TCs located in a specific hexagon
     """
+    global results
     Resultados = []
     for i in Thresholds.index:
         array = df.to_numpy()  
@@ -195,8 +198,8 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
     hex_loc_df = pd.DataFrame(center,columns = ['Hex_lat', 'Hex_long'])
     probs_results_aux = pd.concat([hex_loc_df, dataframe])
     probs_results = pd.concat([probs_results, probs_results_aux])
-    results[i] = probs_results
-    print ('Hilo numero',i,' concluido \n')  
+    results[x] = probs_results
+    print ('Hilo numero ',x,' concluido \n')  
 
 def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thresholds: pd.DataFrame, stations, region, style, projection, savedir) -> None:
     """
@@ -212,6 +215,7 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     Process:
         Analayze all hexagons and make a graphical result of probabilities in all stations. Saves the computed probabilities in a .csv file
     """
+    global results
     x_centers, y_centers = (centers[0],centers[1])
     ncolumns = len(grid[0])
     x_centers_par = x_centers[0:ncolumns]
@@ -228,11 +232,11 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
                 continue
             else:
                 if i%2 == 0: 
-                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x,results,))
+                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x,))
                     threads.append(thread)
                     thread.start()
                 else:
-                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x,results,))
+                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x,))
                     threads.append(thread)
                     thread.start()
                 x=x+1
@@ -240,7 +244,8 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     for i in threads:
         i.join()
     
+    print(results)
     for i in results:
-        probs_results = pd.concat([probs_results, results[i]])
+        probs_results = pd.concat([probs_results, i])
     probs_results.to_csv('results_probabilities.csv') 
     

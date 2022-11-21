@@ -96,8 +96,6 @@ def main(compute_probs, period, grid_region, stations_region, location, cols, ro
     #Computing the probabilities
     if compute_probs:
         aux.Probs_grid(HexGrid, centers, Thresholds, station_locations, stations_region, style_stations, projection_stations, img_save)
-    end_time = datetime.now()
-    print('Duration: {}'.format(end_time - start_time))
 
 
 # ##Grid = main(False, ['1/1/1981','31/12/2020'], [115, 145, 0, 35], [-85,-75, 5, 10], (127.5, 15), 3, 2, 2)
