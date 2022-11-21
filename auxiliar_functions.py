@@ -5,6 +5,10 @@ import numpy as np
 from typing import Tuple, List
 import matplotlib.path as mpltPath
 import plot_functions as plot
+from dask import delayed
+from dask.distributed import Client
+
+c = Client('tcp://127.0.0.1:8786')
 
 def create_IRdf(df: pd.DataFrame) -> List[str]:
     """
@@ -166,7 +170,7 @@ def make_grid(ncolumns: int, nrows: int, scale: float, xpos , ypos) -> Tuple[flo
     coord_y = coord_y.reshape(-1, 1)
     return coord_x, coord_y
 
-
+@delayed
 def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
     """
     Parameters:
@@ -212,6 +216,7 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     x_centers_impar = x_centers[ncolumns:2*ncolumns]
     y_centers = y_centers[0:-1:ncolumns]    
     probs_results = pd.DataFrame(columns = ['Hex_lat', 'Hex_long', 'ID', 'distribution' , '%Green', '%Yellow', '%Red']) 
+    
     for i in range(0,len(grid)): 
         for j in range(0,len(grid[0])): 
             if grid[i][j].shape[0] < 7:
@@ -221,12 +226,14 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
                 if i%2 == 0:  
                     probabilities_df = get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds)
                     hex_loc_df = pd.DataFrame([[x_centers_par[j], y_centers[i]]],columns = ['Hex_lat', 'Hex_long'])
+                    probabilities_df = c.compute(probabilities_df, sync=True)
                     probs_results_aux = pd.concat([hex_loc_df, probabilities_df])
                     probs_results = pd.concat([probs_results, probs_results_aux])
                     # plot.make_figures(probabilities_df, x_centers_par[j], y_centers[i], stations, region, style, projection, savedir)
                 else:
                     probabilities_df = get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds)
                     hex_loc_df = pd.DataFrame([[x_centers_impar[j], y_centers[i]]],columns = ['Hex_lat', 'Hex_long'])
+                    probabilities_df = c.compute(probabilities_df, sync=True)
                     probs_results_aux = pd.concat([hex_loc_df, probabilities_df])
                     probs_results = pd.concat([probs_results, probs_results_aux])
                     # plot.make_figures(probabilities_df, x_centers_impar[j], y_centers[i], stations, region, style, projection, savedir)
