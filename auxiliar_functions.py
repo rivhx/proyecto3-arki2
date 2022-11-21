@@ -5,6 +5,9 @@ import numpy as np
 from typing import Tuple, List
 import matplotlib.path as mpltPath
 import plot_functions as plot
+import multiprocessing as mp
+
+results = []
 
 def create_IRdf(df: pd.DataFrame) -> List[str]:
     """
@@ -167,7 +170,7 @@ def make_grid(ncolumns: int, nrows: int, scale: float, xpos , ypos) -> Tuple[flo
     return coord_x, coord_y
 
 
-def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
+def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, center,x) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
     """
     Parameters:
         df (pd DataFrame): Induced precipitation data of one hexagon
@@ -179,18 +182,24 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame) -> pd.DataFram
     Return:
         pd DataFrame containing probabilities of all stations due to TCs located in a specific hexagon
     """
+    global results
     Resultados = []
     for i in Thresholds.index:
         array = df.to_numpy()  
         station_data = array[:,i]
         dist = distfit(distr = 'popular',smooth=10)
-        dist.fit_transform(station_data)
+        dist.fit_transform(station_data, verbose = 0)
         *parametros, loc, scale =  dist.model['params']
         #dist.plot() #Plot of the empirical and theoretical distributions
         probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), *parametros, loc = loc, scale = scale)),2)
         Resultados.append([Thresholds['ID'].loc[i], dist.model['name'] ,*probabilities_VNR]) 
     dataframe = pd.DataFrame(Resultados, columns = ['ID', 'distribution' , '%Green', '%Yellow', '%Red'])
-    return dataframe  
+
+    hex_loc_df = pd.DataFrame(center,columns = ['Hex_lat', 'Hex_long'])
+    probs_results_aux = pd.concat([hex_loc_df, dataframe])
+    probs_results = pd.concat([probs_results, probs_results_aux])
+    results[x] = probs_results
+    print ('Proceso numero ',x,' concluido \n')  
 
 def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thresholds: pd.DataFrame, stations, region, style, projection, savedir) -> None:
     """
@@ -206,29 +215,35 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     Process:
         Analayze all hexagons and make a graphical result of probabilities in all stations. Saves the computed probabilities in a .csv file
     """
+    global results 
+    global pool
     x_centers, y_centers = (centers[0],centers[1])
     ncolumns = len(grid[0])
     x_centers_par = x_centers[0:ncolumns]
     x_centers_impar = x_centers[ncolumns:2*ncolumns]
     y_centers = y_centers[0:-1:ncolumns]    
     probs_results = pd.DataFrame(columns = ['Hex_lat', 'Hex_long', 'ID', 'distribution' , '%Green', '%Yellow', '%Red']) 
+    totalprocesses=len(grid)*len(grid[0])
+    results = [None] * totalprocesses
+    pool = mp.Pool(processes=totalprocesses)
+    x=0
     for i in range(0,len(grid)): 
         for j in range(0,len(grid[0])): 
             if grid[i][j].shape[0] < 7:
                 continue
-            else:    
-                print(i,j)
-                if i%2 == 0:  
-                    probabilities_df = get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds)
-                    hex_loc_df = pd.DataFrame([[x_centers_par[j], y_centers[i]]],columns = ['Hex_lat', 'Hex_long'])
-                    probs_results_aux = pd.concat([hex_loc_df, probabilities_df])
-                    probs_results = pd.concat([probs_results, probs_results_aux])
-                    # plot.make_figures(probabilities_df, x_centers_par[j], y_centers[i], stations, region, style, projection, savedir)
+            else:
+                if i%2 == 0: 
+                    pool.apply_async(func=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x,))
                 else:
-                    probabilities_df = get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds)
-                    hex_loc_df = pd.DataFrame([[x_centers_impar[j], y_centers[i]]],columns = ['Hex_lat', 'Hex_long'])
-                    probs_results_aux = pd.concat([hex_loc_df, probabilities_df])
-                    probs_results = pd.concat([probs_results, probs_results_aux])
-                    # plot.make_figures(probabilities_df, x_centers_impar[j], y_centers[i], stations, region, style, projection, savedir)
+                    pool.apply_async(func=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x,))
+                x=x+1
+    print ('Esperando los',x,'procesos... \n')
+    
+    pool.close()
+    pool.join()
+    
+    
+    for i in results:
+        probs_results = pd.concat([probs_results, i])
     probs_results.to_csv('results_probabilities.csv') 
     
