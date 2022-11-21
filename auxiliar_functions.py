@@ -185,7 +185,7 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
         array = df.to_numpy()  
         station_data = array[:,i]
         dist = distfit(distr = 'popular',smooth=10)
-        dist.fit_transform(station_data)
+        dist.fit_transform(station_data, verbose = 0)
         *parametros, loc, scale =  dist.model['params']
         #dist.plot() #Plot of the empirical and theoretical distributions
         probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), *parametros, loc = loc, scale = scale)),2)
@@ -195,7 +195,8 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
     hex_loc_df = pd.DataFrame(center,columns = ['Hex_lat', 'Hex_long'])
     probs_results_aux = pd.concat([hex_loc_df, dataframe])
     probs_results = pd.concat([probs_results, probs_results_aux])
-    results[i] = probs_results  
+    results[i] = probs_results
+    print ('Hilo numero',i,' concluido \n')  
 
 def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thresholds: pd.DataFrame, stations, region, style, projection, savedir) -> None:
     """
@@ -220,20 +221,22 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     totalthreads=len(grid)*len(grid[0])
     results = [None] * totalthreads
     threads = []
+    x=0
     for i in range(0,len(grid)): 
         for j in range(0,len(grid[0])): 
             if grid[i][j].shape[0] < 7:
                 continue
             else:
                 if i%2 == 0: 
-                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],i,results,))
+                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x,results,))
                     threads.append(thread)
                     thread.start()
                 else:
-                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],i,results,))
+                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x,results,))
                     threads.append(thread)
                     thread.start()
-
+                x=x+1
+    print ('Esperando los',x,'hilos... \n')
     for i in threads:
         i.join()
     
