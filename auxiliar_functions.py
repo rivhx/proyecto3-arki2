@@ -5,6 +5,7 @@ import numpy as np
 from typing import Tuple, List
 import matplotlib.path as mpltPath
 import plot_functions as plot
+import threading
 
 def create_IRdf(df: pd.DataFrame) -> List[str]:
     """
@@ -167,7 +168,7 @@ def make_grid(ncolumns: int, nrows: int, scale: float, xpos , ypos) -> Tuple[flo
     return coord_x, coord_y
 
 
-def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
+def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, center,i,results) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
     """
     Parameters:
         df (pd DataFrame): Induced precipitation data of one hexagon
@@ -190,7 +191,11 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame) -> pd.DataFram
         probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), *parametros, loc = loc, scale = scale)),2)
         Resultados.append([Thresholds['ID'].loc[i], dist.model['name'] ,*probabilities_VNR]) 
     dataframe = pd.DataFrame(Resultados, columns = ['ID', 'distribution' , '%Green', '%Yellow', '%Red'])
-    return dataframe  
+
+    hex_loc_df = pd.DataFrame(center,columns = ['Hex_lat', 'Hex_long'])
+    probs_results_aux = pd.concat([hex_loc_df, dataframe])
+    probs_results = pd.concat([probs_results, probs_results_aux])
+    results[i] = probs_results  
 
 def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thresholds: pd.DataFrame, stations, region, style, projection, savedir) -> None:
     """
@@ -212,23 +217,27 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     x_centers_impar = x_centers[ncolumns:2*ncolumns]
     y_centers = y_centers[0:-1:ncolumns]    
     probs_results = pd.DataFrame(columns = ['Hex_lat', 'Hex_long', 'ID', 'distribution' , '%Green', '%Yellow', '%Red']) 
+    totalthreads=len(grid)*len(grid[0])
+    results = [None] * totalthreads
+    threads = []
     for i in range(0,len(grid)): 
         for j in range(0,len(grid[0])): 
             if grid[i][j].shape[0] < 7:
                 continue
-            else:    
-                print(i,j)
-                if i%2 == 0:  
-                    probabilities_df = get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds)
-                    hex_loc_df = pd.DataFrame([[x_centers_par[j], y_centers[i]]],columns = ['Hex_lat', 'Hex_long'])
-                    probs_results_aux = pd.concat([hex_loc_df, probabilities_df])
-                    probs_results = pd.concat([probs_results, probs_results_aux])
-                    # plot.make_figures(probabilities_df, x_centers_par[j], y_centers[i], stations, region, style, projection, savedir)
+            else:
+                if i%2 == 0: 
+                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],i,results,))
+                    threads.append(thread)
+                    thread.start()
                 else:
-                    probabilities_df = get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds)
-                    hex_loc_df = pd.DataFrame([[x_centers_impar[j], y_centers[i]]],columns = ['Hex_lat', 'Hex_long'])
-                    probs_results_aux = pd.concat([hex_loc_df, probabilities_df])
-                    probs_results = pd.concat([probs_results, probs_results_aux])
-                    # plot.make_figures(probabilities_df, x_centers_impar[j], y_centers[i], stations, region, style, projection, savedir)
+                    thread = threading.Thread(target=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],i,results,))
+                    threads.append(thread)
+                    thread.start()
+
+    for i in threads:
+        i.join()
+    
+    for i in results:
+        probs_results = pd.concat([probs_results, results[i]])
     probs_results.to_csv('results_probabilities.csv') 
     
