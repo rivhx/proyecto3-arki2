@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
 # ##demo([-120, -70,-20, 20])
     start_time = datetime.now()
-    main(True, ['1/1/1981', '31/12/2020'], [-120, -70,0, 20], [-86, -82.5,8, 11.5], (-105, 10), 2, 1, 2.5)
+    main(True, ['1/1/1981', '31/12/2020'], [-120, -70,0, 20], [-86, -82.5,8, 11.5], (-105, 10), 4, 3, 2.5)
     ##aux.get_thresholds()
     end_time = datetime.now()
     print('Duration: {}'.format(end_time - start_time))
