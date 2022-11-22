@@ -11,11 +11,11 @@ import multiprocessing as mp
 def custom_error_callback(error):
     print(f'Got an Error: {error}', flush=True)
 
-def init_process(shared_results):
+def init_process(shared_queue):
     # declare scope of a new global variable
-    global results
+    global queue
     # store argument in the global variable for this process
-    results = shared_results
+    queue = shared_queue
 
 def create_IRdf(df: pd.DataFrame) -> List[str]:
     """
@@ -190,7 +190,7 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
     Return:
         pd DataFrame containing probabilities of all stations due to TCs located in a specific hexagon
     """
-    global results
+    global queue
     Resultados = []
     for i in Thresholds.index:
         array = df.to_numpy()  
@@ -206,7 +206,7 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
     hex_loc_df = pd.DataFrame(center,columns = ['Hex_lat', 'Hex_long'])
     probs_results_aux = pd.concat([hex_loc_df, dataframe])
     probs_results = pd.concat([probs_results, probs_results_aux])
-    results[x] = probs_results
+    queue.put((x, probs_results)) 
     print ('Proceso numero ',x,' concluido \n')  
 
 def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thresholds: pd.DataFrame, stations, region, style, projection, savedir) -> None:
@@ -224,6 +224,7 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
         Analayze all hexagons and make a graphical result of probabilities in all stations. Saves the computed probabilities in a .csv file
     """
     global pool
+    shared_queue = mp.Queue()
     x_centers, y_centers = (centers[0],centers[1])
     ncolumns = len(grid[0])
     x_centers_par = x_centers[0:ncolumns]
@@ -231,8 +232,8 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     y_centers = y_centers[0:-1:ncolumns]    
     probs_results = pd.DataFrame(columns = ['Hex_lat', 'Hex_long', 'ID', 'distribution' , '%Green', '%Yellow', '%Red']) 
     totalprocesses=len(grid)*len(grid[0])
-    shared_results = [None] * totalprocesses
-    pool = mp.Pool(processes=totalprocesses,initializer=init_process, initargs=(shared_results,))
+    results = [None] * totalprocesses
+    pool = mp.Pool(processes=totalprocesses,initializer=init_process, initargs=(shared_queue,))
     x=0
     for i in range(0,len(grid)): 
         for j in range(0,len(grid[0])): 
@@ -248,9 +249,19 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     
     pool.close()
     pool.join()
+    shared_queue.close()
+    shared_queue.join()
+    print(shared_queue.empty)
+
+    for i in range(totalprocesses):
+        print('a')
+        result_pd=shared_queue.get()
+        print(result_pd)
+        results[result_pd[0]]=result_pd[1]
     
-    
-    for i in shared_results:
+    print(results)
+
+    for i in results:
         probs_results = pd.concat([probs_results, i])
     probs_results.to_csv('results_probabilities.csv') 
     
