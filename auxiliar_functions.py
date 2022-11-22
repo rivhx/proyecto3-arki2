@@ -7,7 +7,15 @@ import matplotlib.path as mpltPath
 import plot_functions as plot
 import multiprocessing as mp
 
-results = []
+
+def custom_error_callback(error):
+    print(f'Got an Error: {error}', flush=True)
+
+def init_process(shared_results):
+    # declare scope of a new global variable
+    global results
+    # store argument in the global variable for this process
+    results = shared_results
 
 def create_IRdf(df: pd.DataFrame) -> List[str]:
     """
@@ -215,7 +223,6 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     Process:
         Analayze all hexagons and make a graphical result of probabilities in all stations. Saves the computed probabilities in a .csv file
     """
-    global results 
     global pool
     x_centers, y_centers = (centers[0],centers[1])
     ncolumns = len(grid[0])
@@ -224,8 +231,8 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     y_centers = y_centers[0:-1:ncolumns]    
     probs_results = pd.DataFrame(columns = ['Hex_lat', 'Hex_long', 'ID', 'distribution' , '%Green', '%Yellow', '%Red']) 
     totalprocesses=len(grid)*len(grid[0])
-    results = [None] * totalprocesses
-    pool = mp.Pool(processes=totalprocesses)
+    shared_results = [None] * totalprocesses
+    pool = mp.Pool(processes=totalprocesses,initializer=init_process, initargs=(shared_results,))
     x=0
     for i in range(0,len(grid)): 
         for j in range(0,len(grid[0])): 
@@ -233,9 +240,9 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
                 continue
             else:
                 if i%2 == 0: 
-                    pool.apply_async(func=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x,))
+                    pool.apply_async(func=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x,),error_callback=custom_error_callback)
                 else:
-                    pool.apply_async(func=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x,))
+                    pool.apply_async(func=get_probabilities,args=(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x,),error_callback=custom_error_callback)
                 x=x+1
     print ('Esperando los',x,'procesos... \n')
     
@@ -243,7 +250,7 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     pool.join()
     
     
-    for i in results:
+    for i in shared_results:
         probs_results = pd.concat([probs_results, i])
     probs_results.to_csv('results_probabilities.csv') 
     
