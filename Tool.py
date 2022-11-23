@@ -2,7 +2,6 @@ import auxiliar_functions as aux
 import pandas as pd
 ##import pygmt
 from datetime import datetime
-import threading
 
 
 # def demo(region, projection = "M17.5c", style = "c0.125c"):
