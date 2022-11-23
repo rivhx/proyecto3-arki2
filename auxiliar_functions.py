@@ -5,10 +5,8 @@ import numpy as np
 from typing import Tuple, List
 import matplotlib.path as mpltPath
 import plot_functions as plot
-from dask import delayed
-from dask.distributed import Client
-
-c = Client('tcp://127.0.0.1:8786')
+import numba
+from numba import jit
 
 
 def create_IRdf(df: pd.DataFrame) -> List[str]:
@@ -171,7 +169,7 @@ def make_grid(ncolumns: int, nrows: int, scale: float, xpos , ypos) -> Tuple[flo
     coord_y = coord_y.reshape(-1, 1)
     return coord_x, coord_y
 
-@delayed
+@jit(forceobj=True, parallel=True)
 def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, center,x) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
     """
     Parameters:
@@ -191,18 +189,25 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
         station_data = array[:,i]
         dist = distfit(distr = 'popular',smooth=10)
         dist.fit_transform(station_data, verbose = 0)
-        *parametros, loc, scale =  dist.model['params']
+        parametros =  list(dist.model['arg']) 
+        loc=  dist.model['loc']
+        scale =  dist.model['scale']
         #dist.plot() #Plot of the empirical and theoretical distributions
-        probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), *parametros, loc = loc, scale = scale)),2)
+        if len(parametros) == 1:
+            probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), parametros[0], loc = loc, scale = scale)),2)
+        elif len(parametros) == 2:
+            probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), parametros[0], parametros[1], loc = loc, scale = scale)),2)
+        else:
+            probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), loc = loc, scale = scale)),2)
         Resultados.append([Thresholds['ID'].loc[i], dist.model['name'] ,*probabilities_VNR]) 
     dataframe = pd.DataFrame(Resultados, columns = ['ID', 'distribution' , '%Green', '%Yellow', '%Red'])
-
     hex_loc_df = pd.DataFrame(center,columns = ['Hex_lat', 'Hex_long'])
     probs_results_aux = pd.concat([hex_loc_df, dataframe])
     probs_results = pd.concat([probs_results, probs_results_aux])
     probs_results.to_csv('results_probabilities'+str(x)+'.csv') 
     print ('Grid numero ',x,' concluido \n')  
 
+@jit(forceobj=True, parallel=True)
 def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thresholds: pd.DataFrame, stations, region, style, projection, savedir) -> None:
     """
     Parameters:
@@ -232,27 +237,16 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
                 continue
             else:
                 if i%2 == 0:
-                    probabilities=get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x)
-                    results.append(probabilities)
+                    get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x)
+                    
                 else:
-                    probabilities=get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x)
-                    results.append(probabilities)
+                    get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x)    
                 x=x+1
-    #probabilities = c.compute(probabilities, sync=True)
-    print ('Esperando dask \n')
-    results=c.compute(results, sync=True)
-    c.wait_for_workers(1)
-    c.close()
-    # for i in results:
-    #     c.compute(i)
 
-    
-    
-    
 
-    # for i in range(totalgrids):
-    #     Temp_data = pd.read_csv('results_probabilities'+str(i)+'.csv', delimiter = ",")
-    #     probs_results = pd.concat([probs_results, Temp_data])
+    for i in range(totalgrids):
+         Temp_data = pd.read_csv('results_probabilities'+str(i)+'.csv', delimiter = ",")
+         probs_results = pd.concat([probs_results, Temp_data])
     
-    # probs_results.to_csv('results_probabilities.csv') 
+    probs_results.to_csv('results_probabilities.csv') 
     
