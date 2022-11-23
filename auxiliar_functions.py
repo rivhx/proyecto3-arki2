@@ -5,8 +5,10 @@ import numpy as np
 from typing import Tuple, List
 import matplotlib.path as mpltPath
 import plot_functions as plot
-import numba
-from numba import jit
+import pp
+
+# Create jobserver
+job_server = pp.Server()
 
 
 def create_IRdf(df: pd.DataFrame) -> List[str]:
@@ -169,7 +171,7 @@ def make_grid(ncolumns: int, nrows: int, scale: float, xpos , ypos) -> Tuple[flo
     coord_y = coord_y.reshape(-1, 1)
     return coord_x, coord_y
 
-@jit(forceobj=True, parallel=True)
+
 def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, center,x) -> pd.DataFrame: #df lluvias de ciclones, umbrales 
     """
     Parameters:
@@ -182,32 +184,25 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
     Return:
         pd DataFrame containing probabilities of all stations due to TCs located in a specific hexagon
     """
-    print ('Grid numero ',x,' iniciando procesamiento \n')  
+    print ('Job numero ',x,' inicializado \n')  
     Resultados = []
     for i in Thresholds.index:
         array = df.to_numpy()  
         station_data = array[:,i]
         dist = distfit(distr = 'popular',smooth=10)
         dist.fit_transform(station_data, verbose = 0)
-        parametros =  list(dist.model['arg']) 
-        loc=  dist.model['loc']
-        scale =  dist.model['scale']
+        *parametros, loc, scale =  dist.model['params']
         #dist.plot() #Plot of the empirical and theoretical distributions
-        if len(parametros) == 1:
-            probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), parametros[0], loc = loc, scale = scale)),2)
-        elif len(parametros) == 2:
-            probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), parametros[0], parametros[1], loc = loc, scale = scale)),2)
-        else:
-            probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), loc = loc, scale = scale)),2)
+        probabilities_VNR = np.round(100*(1-dist.model['distr'].cdf(list(Thresholds.loc[i,['Green','Yellow','Red']]), *parametros, loc = loc, scale = scale)),2)
         Resultados.append([Thresholds['ID'].loc[i], dist.model['name'] ,*probabilities_VNR]) 
     dataframe = pd.DataFrame(Resultados, columns = ['ID', 'distribution' , '%Green', '%Yellow', '%Red'])
     hex_loc_df = pd.DataFrame(center,columns = ['Hex_lat', 'Hex_long'])
     probs_results_aux = pd.concat([hex_loc_df, dataframe])
     probs_results = pd.concat([probs_results, probs_results_aux])
     probs_results.to_csv('results_probabilities'+str(x)+'.csv') 
-    print ('Grid numero ',x,' concluido \n')  
+    print ('Job numero ',x,' Finalizado \n')  
 
-@jit(forceobj=True, parallel=True)
+
 def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thresholds: pd.DataFrame, stations, region, style, projection, savedir) -> None:
     """
     Parameters:
@@ -229,6 +224,8 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     y_centers = y_centers[0:-1:ncolumns]    
     probs_results = pd.DataFrame(columns = ['Hex_lat', 'Hex_long', 'ID', 'distribution' , '%Green', '%Yellow', '%Red']) 
     totalgrids=len(grid)*len(grid[0])
+    job_server.set_ncpus(totalgrids)
+    jobs = []
     results = []
     x=0
     for i in range(0,len(grid)): 
@@ -237,12 +234,15 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
                 continue
             else:
                 if i%2 == 0:
-                    get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x)
+                    jobs.append(job_server.submit(get_probabilities,(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x),(),("disfit","pandas as pd",)))
                     
                 else:
-                    get_probabilities(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x)    
+                    jobs.append(job_server.submit(get_probabilities,(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x),(),("disfit","pandas as pd",)))
+                        
                 x=x+1
-
+    print("Ejecutando Jobs")
+    for job in jobs:
+        result = job()
 
     for i in range(totalgrids):
          Temp_data = pd.read_csv('results_probabilities'+str(i)+'.csv', delimiter = ",")
