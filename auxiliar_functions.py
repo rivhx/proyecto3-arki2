@@ -5,6 +5,7 @@ import numpy as np
 from typing import Tuple, List
 import matplotlib.path as mpltPath
 import plot_functions as plot
+import os
 import pp
 
 # Create jobserver
@@ -184,7 +185,7 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
     Return:
         pd DataFrame containing probabilities of all stations due to TCs located in a specific hexagon
     """
-    print ('Job numero ',x,' inicializado \n')  
+    
     Resultados = []
     for i in Thresholds.index:
         array = df.to_numpy()  
@@ -200,7 +201,8 @@ def get_probabilities(df: pd.DataFrame, Thresholds: pd.DataFrame,probs_results, 
     probs_results_aux = pd.concat([hex_loc_df, dataframe])
     probs_results = pd.concat([probs_results, probs_results_aux])
     probs_results.to_csv('results_probabilities'+str(x)+'.csv') 
-    print ('Job numero ',x,' Finalizado \n')  
+    print ('Job numero ',x,' Finalizado \n')
+    return True  
 
 
 def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thresholds: pd.DataFrame, stations, region, style, projection, savedir) -> None:
@@ -226,7 +228,6 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
     totalgrids=len(grid)*len(grid[0])
     job_server.set_ncpus(totalgrids)
     jobs = []
-    results = []
     x=0
     for i in range(0,len(grid)): 
         for j in range(0,len(grid[0])): 
@@ -234,19 +235,24 @@ def Probs_grid(grid: List[List[pd.DataFrame]], centers: List[List[float]], Thres
                 continue
             else:
                 if i%2 == 0:
-                    jobs.append(job_server.submit(get_probabilities,(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x),(),("disfit","pandas as pd",)))
+                    jobs.append(job_server.submit(get_probabilities,(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_par[j], y_centers[i]]],x),(),("distfit","pandas as pd",)))
                     
                 else:
-                    jobs.append(job_server.submit(get_probabilities,(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x),(),("disfit","pandas as pd",)))
+                    jobs.append(job_server.submit(get_probabilities,(grid[i][j].drop(columns=['lat','lon']), Thresholds,probs_results,[[x_centers_impar[j], y_centers[i]]],x),(),("distfit","pandas as pd",)))
                         
                 x=x+1
-    print("Ejecutando Jobs")
+    print("Ejecutando ",totalgrids," Jobs\n")
     for job in jobs:
-        result = job()
+        job()
 
+    job_server.print_stats()
+
+    job_server.destroy()
+    
     for i in range(totalgrids):
          Temp_data = pd.read_csv('results_probabilities'+str(i)+'.csv', delimiter = ",")
          probs_results = pd.concat([probs_results, Temp_data])
+         os.remove('results_probabilities'+str(i)+'.csv')
     
     probs_results.to_csv('results_probabilities.csv') 
     
